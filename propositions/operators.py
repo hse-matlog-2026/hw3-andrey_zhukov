@@ -23,40 +23,41 @@ def to_not_and_or(formula: Formula) -> Formula:
         ``'|'``.
     """
     # Task 3.5
-    if formula.root == 'T':
-        return Formula.parse('(p|~p)')
-    if formula.root == 'F':
-        return Formula.parse('~(p|~p)')
+    root = formula.root
 
-    if formula.first is None and formula.second is None:
+    if is_variable(root):
         return formula
 
-    if formula.root == '~':
+    if is_constant(root):
+        p = Formula('p')
+        if root == 'T':
+            return Formula('|', p, Formula('~', p))
+        else:
+            return Formula('&', p, Formula('~', p))
+
+    if is_unary(root):
         return Formula('~', to_not_and_or(formula.first))
 
     left = to_not_and_or(formula.first)
     right = to_not_and_or(formula.second)
 
-    if formula.root == '&':
-        return Formula('&', left, right)
+    if root == '&' or root == '|':
+        return Formula(root, left, right)
 
-    if formula.root == '|':
-        return Formula('|', left, right)
+    if root == '->':
+        return Formula('|', Formula('~', left), right)
 
-    if formula.root == '->':
-        return Formula.parse('(~p|q)').substitute_variables({'p': left, 'q': right})
+    if root == '+':
+        return Formula('|', Formula('&', left, Formula('~', right)), Formula('&', Formula('~', left), right))
 
-    if formula.root == '+':
-        return Formula.parse('~((p&q)|(~p&~q))').substitute_variables({'p': left, 'q': right})
+    if root == '<->':
+        return Formula('|', Formula('&', left, right), Formula('&', Formula('~', left), Formula('~', right)))
 
-    if formula.root == '<->':
-        return Formula.parse('((p&q)|(~p&~q))').substitute_variables({'p': left, 'q': right})
+    if root == '-&':
+        return Formula('~', Formula('&', left, right))
 
-    if formula.root == '-&':
-        return Formula.parse('~(p&q)').substitute_variables({'p': left, 'q': right})
-
-    if formula.root == '-|':
-        return Formula.parse('~(p|q)').substitute_variables({'p': left, 'q': right})
+    if root == '-|':
+        return Formula('~', Formula('|', left, right))
 
 def to_not_and(formula: Formula) -> Formula:
     """Syntactically converts the given formula to an equivalent formula that
@@ -70,22 +71,46 @@ def to_not_and(formula: Formula) -> Formula:
         contains no constants or operators beyond ``'~'`` and ``'&'``.
     """
     # Task 3.6a
-    f = to_not_and_or(formula)
+    root = formula.root
 
-    if f.first is None and f.second is None:
-        return f
+    if is_variable(root):
+        return formula
 
-    if f.root == '~':
-        return Formula('~', to_not_and(f.first))
+    if is_constant(root):
+        p = Formula('p')
+        if root == 'T':
+            return Formula('~', Formula('&', p, Formula('~', p)))
+        return Formula('&', p, Formula('~', p))
 
-    left = to_not_and(f.first)
-    right = to_not_and(f.second)
+    if is_unary(root):
+        return Formula('~', to_not_and(formula.first))
 
-    if f.root == '&':
+    left = to_not_and(formula.first)
+    right = to_not_and(formula.second)
+
+    if root == '&':
         return Formula('&', left, right)
 
-    if f.root == '|':
-        return Formula.parse('~(~p&~q)').substitute_variables({'p': left, 'q': right})
+    if root == '|':
+        return Formula('~', Formula('&', Formula('~', left), Formula('~', right)))
+
+    if root == '->':
+        return to_not_and(Formula('|', Formula('~', formula.first), formula.second))
+
+    if root == '+':
+        return to_not_and(Formula('|', Formula('&', formula.first, Formula('~', formula.second)), Formula('&', Formula('~', formula.first), formula.second)))
+
+    if root == '<->':
+        return to_not_and(
+            Formula('|', Formula('&', formula.first, formula.second), Formula('&', Formula('~', formula.first), Formula('~', formula.second))))
+
+    if root == '-&':
+        return Formula('~', Formula('&', left, right))
+
+    if root == '-|':
+        return to_not_and(Formula('~', Formula('|', formula.first, formula.second)))
+
+    return formula
 
 def to_nand(formula: Formula) -> Formula:
     """Syntactically converts the given formula to an equivalent formula that
@@ -99,21 +124,61 @@ def to_nand(formula: Formula) -> Formula:
         contains no constants or operators beyond ``'-&'``.
     """
     # Task 3.6b
-    f = to_not_and(formula)
+    root = formula.root
 
-    if f.first is None and f.second is None:
-        return f
+    if is_variable(root):
+        return formula
 
-    if f.root == '~':
-        inner = to_nand(f.first)
+    if is_constant(root):
+        p = Formula('p')
+        not_p = Formula('-&', p, p)
+        t = Formula('-&', p, not_p)
+        if root == 'T':
+            return t
+        return Formula('-&', t, t)
+
+    if is_unary(root):
+        inner = to_nand(formula.first)
         return Formula('-&', inner, inner)
 
-    left = to_nand(f.first)
-    right = to_nand(f.second)
+    left = to_nand(formula.first)
+    right = to_nand(formula.second)
 
-    if f.root == '&':
-        temp = Formula('-&', left, right)
-        return Formula('-&', temp, temp)
+    if root == '&':
+        nand = Formula('-&', left, right)
+        return Formula('-&', nand, nand)
+
+    if root == '|':
+        left_not = Formula('-&', left, left)
+        right_not = Formula('-&', right, right)
+        return Formula('-&', left_not, right_not)
+
+    if root == '->':
+        right_not = Formula('-&', right, right)
+        return Formula('-&', left, right_not)
+
+    if root == '+':
+        left_not = Formula('-&', left, left)
+        right_not = Formula('-&', right, right)
+        a_or_b = Formula('-&', left_not, right_not)
+        a_and_b = Formula('-&', Formula('-&', left, right), Formula('-&', left, right))
+        not_and = Formula('-&', a_and_b, a_and_b)
+        return Formula('-&', Formula('-&', a_or_b, not_and), Formula('-&', a_or_b, not_and))
+
+    if root == '<->':
+        xor = to_nand(Formula('+', formula.first, formula.second))
+        return Formula('-&', xor, xor)
+
+    if root == '-&':
+        return Formula('-&', left, right)
+
+    if root == '-|':
+        left_not = Formula('-&', left, left)
+        right_not = Formula('-&', right, right)
+        a_or_b = Formula('-&', left_not, right_not)
+        return Formula('-&', a_or_b, a_or_b)
+
+    return formula
 
 def to_implies_not(formula: Formula) -> Formula:
     """Syntactically converts the given formula to an equivalent formula that
@@ -156,18 +221,43 @@ def to_implies_false(formula: Formula) -> Formula:
         contains no constants or operators beyond ``'->'`` and ``'F'``.
     """
     # Task 3.6d
-    f = to_implies_not(formula)
+    root = formula.root
 
-    # Переменная или F
-    if f.first is None and f.second is None:
-        return f
+    if is_variable(root):
+        return formula
 
-    if f.root == '~':
-        inner = to_implies_false(f.first)
-        return Formula('->', inner, Formula('F'))
+    if is_constant(root):
+        p = Formula('p')
+        if root == 'T':
+            return Formula('->', p, p)
+        return Formula('~', Formula('->', p, p))
 
-    left = to_implies_false(f.first)
-    right = to_implies_false(f.second)
+    if is_unary(root):
+        return Formula('~', to_implies_not(formula.first))
 
-    if f.root == '->':
+    left = to_implies_not(formula.first)
+    right = to_implies_not(formula.second)
+
+    if root == '->':
         return Formula('->', left, right)
+
+    if root == '&':
+        return Formula('~', Formula('->', left, Formula('~', right)))
+
+    if root == '|':
+        return Formula('->', Formula('~', left), right)
+
+    if root == '+':
+        return to_implies_not(
+            Formula('|', Formula('&', formula.first, Formula('~', formula.second)), Formula('&', Formula('~', formula.first), formula.second)))
+
+    if root == '<->':
+        return to_implies_not(Formula('|', Formula('&', formula.first, formula.second), Formula('&', Formula('~', formula.first), Formula('~', formula.second))))
+
+    if root == '-&':
+        return to_implies_not(Formula('~', Formula('&', formula.first, formula.second)))
+
+    if root == '-|':
+        return to_implies_not(Formula('~', Formula('|', formula.first, formula.second)))
+
+    return formula
