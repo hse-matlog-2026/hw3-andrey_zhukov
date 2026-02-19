@@ -23,13 +23,40 @@ def to_not_and_or(formula: Formula) -> Formula:
         ``'|'``.
     """
     # Task 3.5
-    return formula.substitute_operators({
-        '->': Formula.parse('(~p|q)'),
-        '+': Formula.parse('~((p&q)|(~p&~q))'),
-        '<->': Formula.parse('((p&q)|(~p&~q))'),
-        '-&': Formula.parse('~(p&q)'),
-        '-|': Formula.parse('~(p|q)')
-    })
+    if formula.root == 'T':
+        return Formula.parse('(p|~p)')
+    if formula.root == 'F':
+        return Formula.parse('~(p|~p)')
+
+    if formula.first is None and formula.second is None:
+        return formula
+
+    if formula.root == '~':
+        return Formula('~', to_not_and_or(formula.first))
+
+    left = to_not_and_or(formula.first)
+    right = to_not_and_or(formula.second)
+
+    if formula.root == '&':
+        return Formula('&', left, right)
+
+    if formula.root == '|':
+        return Formula('|', left, right)
+
+    if formula.root == '->':
+        return Formula.parse('(~p|q)').substitute_variables({'p': left, 'q': right})
+
+    if formula.root == '+':
+        return Formula.parse('~((p&q)|(~p&~q))').substitute_variables({'p': left, 'q': right})
+
+    if formula.root == '<->':
+        return Formula.parse('((p&q)|(~p&~q))').substitute_variables({'p': left, 'q': right})
+
+    if formula.root == '-&':
+        return Formula.parse('~(p&q)').substitute_variables({'p': left, 'q': right})
+
+    if formula.root == '-|':
+        return Formula.parse('~(p|q)').substitute_variables({'p': left, 'q': right})
 
 def to_not_and(formula: Formula) -> Formula:
     """Syntactically converts the given formula to an equivalent formula that
@@ -43,9 +70,22 @@ def to_not_and(formula: Formula) -> Formula:
         contains no constants or operators beyond ``'~'`` and ``'&'``.
     """
     # Task 3.6a
-    return to_not_and_or(formula).substitute_operators({
-        '|': Formula.parse('~(~p&~q)')
-    })
+    f = to_not_and_or(formula)
+
+    if f.first is None and f.second is None:
+        return f
+
+    if f.root == '~':
+        return Formula('~', to_not_and(f.first))
+
+    left = to_not_and(f.first)
+    right = to_not_and(f.second)
+
+    if f.root == '&':
+        return Formula('&', left, right)
+
+    if f.root == '|':
+        return Formula.parse('~(~p&~q)').substitute_variables({'p': left, 'q': right})
 
 def to_nand(formula: Formula) -> Formula:
     """Syntactically converts the given formula to an equivalent formula that
@@ -59,10 +99,21 @@ def to_nand(formula: Formula) -> Formula:
         contains no constants or operators beyond ``'-&'``.
     """
     # Task 3.6b
-    return to_not_and(formula).substitute_operators({
-        '~': Formula.parse('(p-&p)'),
-        '&': Formula.parse('~(p-&q)')
-    })
+    f = to_not_and(formula)
+
+    if f.first is None and f.second is None:
+        return f
+
+    if f.root == '~':
+        inner = to_nand(f.first)
+        return Formula('-&', inner, inner)
+
+    left = to_nand(f.first)
+    right = to_nand(f.second)
+
+    if f.root == '&':
+        temp = Formula('-&', left, right)
+        return Formula('-&', temp, temp)
 
 def to_implies_not(formula: Formula) -> Formula:
     """Syntactically converts the given formula to an equivalent formula that
@@ -76,10 +127,22 @@ def to_implies_not(formula: Formula) -> Formula:
         contains no constants or operators beyond ``'->'`` and ``'~'``.
     """
     # Task 3.6c
-    return to_not_and_or(formula).substitute_operators({
-        '&': Formula.parse('~(p->~q)'),
-        '|': Formula.parse('(~p->q)')
-    })
+    f = to_not_and_or(formula)
+
+    if f.first is None and f.second is None:
+        return f
+
+    if f.root == '~':
+        return Formula('~', to_implies_not(f.first))
+
+    left = to_implies_not(f.first)
+    right = to_implies_not(f.second)
+
+    if f.root == '&':
+        return Formula.parse('~(p->~q)').substitute_variables({'p': left, 'q': right})
+
+    if f.root == '|':
+        return Formula.parse('(~p->q)').substitute_variables({'p': left, 'q': right})
 
 def to_implies_false(formula: Formula) -> Formula:
     """Syntactically converts the given formula to an equivalent formula that
@@ -93,6 +156,18 @@ def to_implies_false(formula: Formula) -> Formula:
         contains no constants or operators beyond ``'->'`` and ``'F'``.
     """
     # Task 3.6d
-    return to_implies_not(formula).substitute_operators({
-        '~': Formula.parse('(p->F)')
-    })
+    f = to_implies_not(formula)
+
+    # Переменная или F
+    if f.first is None and f.second is None:
+        return f
+
+    if f.root == '~':
+        inner = to_implies_false(f.first)
+        return Formula('->', inner, Formula('F'))
+
+    left = to_implies_false(f.first)
+    right = to_implies_false(f.second)
+
+    if f.root == '->':
+        return Formula('->', left, right)
